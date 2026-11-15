@@ -1,6 +1,6 @@
 # Cadence
 
-Cadence sells video courses to learners. This glossary covers the language around buying courses and getting money back after a purchase.
+Cadence sells video courses to learners. This glossary covers the language around buying courses, getting money back after a purchase, and the learning terms those decisions depend on.
 
 ## Language
 
@@ -40,7 +40,7 @@ A Seat a learner has claimed. It belongs to that learner, so a Team Licence with
 ### Refunds
 
 **Refund Request**:
-The buyer's ask, with their reason, to get back what they paid for one specific Purchase. A Platform Admin approves or declines it. One Purchase can have several Refund Requests over time, but only one can be undecided at once.
+The buyer's ask, with their reason, to get back what they paid for one specific Purchase. A Platform Admin approves or declines it. One Purchase can have several Refund Requests over time, but only one can be undecided at once. Once decided, the decision is final.
 _Avoid_: Refund (for the ask itself), Cancellation, Reversal, Chargeback
 
 **Open Refund Request**:
@@ -52,6 +52,10 @@ A Refund Request a Platform Admin has accepted. Approving it ends what the Purch
 
 **Declined Refund Request**:
 A Refund Request a Platform Admin has turned down. Nothing the Purchase granted is lost, it has no Refund, and the buyer may raise a new Refund Request.
+
+**Refund Eligibility**:
+Whether the buyer may raise a Refund Request on a Purchase: it must be within 14 days of buying, and, for an Individual Purchase, under 50% Course Progress and under 2 hours of Watch Time, or, for a Team Licence, with no Claimed Seat. It governs asking, not deciding: a Platform Admin may approve a request that no longer meets it, except that a Team Licence with a Claimed Seat can never be refunded.
+_Avoid_: Refund policy, Refundable
 
 **Refund**:
 The money returned to the buyer after their Refund Request is approved. It is always the full amount they paid. A declined Refund Request has no Refund.
@@ -67,3 +71,13 @@ _Avoid_: Completed, Paid out
 
 **Failed Refund**:
 A Refund where the money couldn't be sent. The Refund Request stays approved, because the decision hasn't changed.
+
+### Learning
+
+**Course Progress**:
+The share of a course's lessons a learner has completed.
+_Avoid_: Progress (for Watch Time), Completion
+
+**Watch Time**:
+How much of a course's video a learner has watched, regardless of whether lessons were completed.
+_Avoid_: Progress, Time spent
