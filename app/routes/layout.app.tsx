@@ -3,6 +3,9 @@ import type { Route } from "./+types/layout.app";
 import { Sidebar } from "~/components/sidebar";
 import { DevUI } from "~/components/dev-ui";
 import { Toaster } from "sonner";
+// PROTOTYPE — Notification Feed variants (ticket #12)
+import { FeedProvider } from "~/components/notification-feed.prototype/state";
+import { FeedSwitcher, useFeedVariant } from "~/components/notification-feed.prototype/mount";
 import { getCurrentUserId, getDevCountry } from "~/lib/session";
 import { getCountryTierInfo, COUNTRIES } from "~/lib/ppp";
 import { eq, and, or, sql, desc } from "drizzle-orm";
@@ -227,12 +230,41 @@ export default function AppLayout({ loaderData }: Route.ComponentProps) {
     isTeamAdmin: userIsTeamAdmin,
   } = loaderData;
 
+  const feedPerson = currentUser
+    ? {
+        id: currentUser.id,
+        name: currentUser.name,
+        role: currentUser.role,
+        isTeamAdmin: userIsTeamAdmin,
+      }
+    : null;
+
+  return (
+    <FeedProvider person={feedPerson}>
+      <AppShell {...loaderData} />
+    </FeedProvider>
+  );
+}
+
+function AppShell({
+  users,
+  currentUser,
+  recentCourses,
+  devCountry,
+  countryTierInfo,
+  countries,
+  isTeamAdmin: userIsTeamAdmin,
+}: Route.ComponentProps["loaderData"]) {
+  const feedVariant = useFeedVariant();
+
   return (
     <div className="flex h-screen overflow-hidden">
       <Sidebar
         currentUser={currentUser}
         recentCourses={recentCourses}
         isTeamAdmin={userIsTeamAdmin}
+        headerSlot={currentUser ? feedVariant.headerSlot : null}
+        navSlot={currentUser ? feedVariant.navSlot : null}
       />
       <main className="flex-1 overflow-y-auto">
         <Outlet />
@@ -245,6 +277,7 @@ export default function AppLayout({ loaderData }: Route.ComponentProps) {
         countries={countries}
       />
       <Toaster position="bottom-right" richColors closeButton />
+      {currentUser && <FeedSwitcher current={feedVariant.key} />}
     </div>
   );
 }
