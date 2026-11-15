@@ -70,7 +70,11 @@ A Refund where the money has been confirmed as sent back to the buyer.
 _Avoid_: Completed, Paid out
 
 **Failed Refund**:
-A Refund where the money couldn't be sent. The Refund Request stays approved, because the decision hasn't changed.
+A Refund where the money couldn't be sent. The Refund Request stays approved, because the decision hasn't changed. What the Purchase granted stays ended until the buyer chooses: keep it, which gives up the Refund for good, or raise a Refund Appeal.
+
+**Refund Appeal**:
+The buyer's ask to try sending a Failed Refund again. It never reopens the Refund Request.
+_Avoid_: Refund Request (for the retry), Reopen, Dispute
 
 ### Learning
 
