@@ -253,3 +253,10 @@ export async function notificationFeedConfig(
     return { token: null, publicKey, feedChannelId };
   }
 }
+
+// The environment default preference set ("Enrollments off") is written
+// through Knock's Management API; see notification-defaults.server.ts.
+export {
+  setEnrollmentsOffByDefault,
+  type EnvironmentDefaultsResult,
+} from "~/lib/notification-defaults.server";
