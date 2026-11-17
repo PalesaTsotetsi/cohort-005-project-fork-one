@@ -3,7 +3,9 @@ import { useState, useEffect } from "react";
 import { cn } from "~/lib/utils";
 import { UserRole } from "~/db/schema";
 import { UserAvatar } from "~/components/user-avatar";
+import { useNotificationFeed } from "~/lib/notification-feed";
 import {
+  Bell,
   BookOpen,
   ChartColumn,
   LayoutDashboard,
@@ -107,6 +109,34 @@ const navItems: NavItem[] = [
   },
 ];
 
+function NotificationsNavItem() {
+  const { status, unreadCount } = useNotificationFeed();
+  const showDot = status === "ready" && unreadCount > 0;
+
+  return (
+    <NavLink
+      to="/notifications"
+      className={({ isActive }) =>
+        cn(
+          "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+          isActive
+            ? "bg-sidebar-accent text-sidebar-accent-foreground"
+            : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+        )
+      }
+    >
+      <Bell className="size-4" />
+      Notifications
+      {showDot && (
+        <span
+          className="ml-auto size-2 rounded-full bg-rose-600"
+          aria-label={`${unreadCount} unread`}
+        />
+      )}
+    </NavLink>
+  );
+}
+
 function isVisible(item: NavItem, role: UserRole | null): boolean {
   if (item.roles === "all") return true;
   if (!role) return false;
@@ -143,6 +173,7 @@ export function Sidebar({
       </div>
 
       <nav className="flex-1 space-y-1 p-3">
+        {currentUser && <NotificationsNavItem />}
         {navItems
           .filter((item) => isVisible(item, currentUserRole))
           .map((item) => (

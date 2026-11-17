@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import Knock from "@knocklabs/node";
+import Knock, { signUserToken as knockSignUserToken } from "@knocklabs/node";
 import type {
   Notification,
   NotificationKind,
@@ -187,6 +187,70 @@ export async function sendNotification(
         error: error instanceof Error ? error.message : String(error),
       })
     );
+  }
+}
+
+// ─── Feed access for the browser ───
+// Enhanced security is on in Knock, so the browser reads a person's Feed and
+// preferences only with a token signed for that person.
+
+const USER_TOKEN_LIFETIME_SECONDS = 60 * 60;
+
+/**
+ * The signing key is kept on one line: either base64 of the PEM, or the PEM
+ * with its newlines written as a literal "\n".
+ */
+function toPem(signingKey: string): string {
+  const key = signingKey.trim();
+  if (key.startsWith("-----BEGIN")) return key.replaceAll("\\n", "\n");
+  return Buffer.from(key, "base64").toString("utf8");
+}
+
+/** Mints an RS256 token for this user that expires in about an hour. */
+export function signUserToken(
+  userId: number,
+  signingKey: string
+): Promise<string> {
+  return knockSignUserToken(String(userId), {
+    signingKey: toPem(signingKey),
+    expiresInSeconds: USER_TOKEN_LIFETIME_SECONDS,
+  });
+}
+
+/** What the browser needs to open the session user's Notification Feed. */
+export type NotificationFeedConfig = {
+  /** null when the Feed can't be opened; the browser then reports it unavailable. */
+  token: string | null;
+  publicKey: string | null;
+  feedChannelId: string | null;
+};
+
+/**
+ * Reads the keys on every call. Without a user, the signing key, the public
+ * key or the feed channel id there is no token. A key that fails to sign is
+ * logged as one line and also gives no token, so the page still renders.
+ */
+export async function notificationFeedConfig(
+  userId: number | null
+): Promise<NotificationFeedConfig> {
+  const publicKey = process.env.KNOCK_PUBLIC_API_KEY || null;
+  const feedChannelId = process.env.KNOCK_FEED_CHANNEL_ID || null;
+  const signingKey = process.env.KNOCK_SIGNING_KEY;
+  if (userId === null || !signingKey || !publicKey || !feedChannelId) {
+    return { token: null, publicKey, feedChannelId };
+  }
+  try {
+    const token = await signUserToken(userId, signingKey);
+    return { token, publicKey, feedChannelId };
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        event: "user_token_failed",
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    );
+    return { token: null, publicKey, feedChannelId };
   }
 }
 
