@@ -1,3 +1,4 @@
+import { createVerify, generateKeyPairSync } from "node:crypto";
 import { mkdtempSync, readdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -7,6 +8,7 @@ import {
   outboxTransport,
   recordingTransport,
   sendNotification,
+  signUserToken,
   toKnockTrigger,
   type NotificationTransport,
 } from "./notifications.server";
@@ -330,5 +332,45 @@ describe("sendNotification", () => {
     expect(files).toHaveLength(1);
     const written = JSON.parse(readFileSync(join(directory, files[0]), "utf8"));
     expect(written).toEqual({ workflow: "discussion-question", notification: question });
+  });
+});
+
+describe("signUserToken", () => {
+  const { privateKey, publicKey } = generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+    privateKeyEncoding: { type: "pkcs8", format: "pem" },
+    publicKeyEncoding: { type: "spki", format: "pem" },
+  });
+
+  function readToken(token: string) {
+    const [header, payload, signature] = token.split(".");
+    const verifier = createVerify("RSA-SHA256");
+    verifier.update(`${header}.${payload}`);
+    return {
+      header: JSON.parse(Buffer.from(header, "base64url").toString("utf8")),
+      payload: JSON.parse(Buffer.from(payload, "base64url").toString("utf8")),
+      verified: verifier.verify(publicKey, signature, "base64url"),
+    };
+  }
+
+  it("signs an RS256 token for the user with a base64-encoded key, expiring in about an hour", async () => {
+    const base64Key = Buffer.from(privateKey).toString("base64");
+
+    const token = readToken(await signUserToken(7, base64Key));
+
+    expect(token.verified).toBe(true);
+    expect(token.header.alg).toBe("RS256");
+    expect(token.payload.sub).toBe("7");
+    expect(token.payload.exp - token.payload.iat).toBe(3600);
+  });
+
+  it("accepts a PEM written on one line with literal \\n escapes", async () => {
+    const escapedPem = privateKey.trim().replaceAll("\n", "\\n");
+    expect(escapedPem).not.toContain("\n");
+
+    const token = readToken(await signUserToken(2, escapedPem));
+
+    expect(token.verified).toBe(true);
+    expect(token.payload.sub).toBe("2");
   });
 });
