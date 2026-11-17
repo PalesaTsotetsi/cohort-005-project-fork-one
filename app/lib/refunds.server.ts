@@ -15,6 +15,7 @@ import {
   videoWatchEvents,
   LessonProgressStatus,
   RefundStatus,
+  UserRole,
 } from "~/db/schema";
 import { formatPrice } from "~/lib/utils";
 import {
@@ -23,6 +24,12 @@ import {
   REFUND_WINDOW_DAYS,
   type RuleBreak,
 } from "~/lib/refund-rules";
+import {
+  courseUrl,
+  othersThan,
+  toNotificationUser,
+  type Notification,
+} from "~/lib/notifications";
 
 // ─── Refunds ───
 // Everything about Refund Requests: whether a Purchase may be refunded, raising
@@ -351,7 +358,13 @@ export function getRefundOffer(
 export type Email = { to: string; subject: string; body: string };
 
 export type RaiseResult =
-  | { ok: true; refundRequestId: number; kind: PurchaseKind; email: Email }
+  | {
+      ok: true;
+      refundRequestId: number;
+      kind: PurchaseKind;
+      email: Email;
+      notifications: Notification[];
+    }
   | Failure;
 
 export function raiseRefundRequest(
@@ -387,9 +400,44 @@ export function raiseRefundRequest(
     .returning()
     .get();
 
+  const buyerAsRecipient = toNotificationUser(buyer);
+  const notifications: Notification[] = [
+    {
+      kind: "refund-request-raised",
+      actor: buyerAsRecipient,
+      recipients: [buyerAsRecipient],
+      courseTitle: course.title,
+      url: courseUrl(course.slug),
+      reason,
+    },
+  ];
+
+  // Every Platform Admin gets their own copy, but never about their own
+  // Purchase: a Platform Admin raising one only gets the confirmation.
+  const platformAdmins = othersThan(
+    buyerAsRecipient,
+    db
+      .select()
+      .from(users)
+      .where(eq(users.role, UserRole.Admin))
+      .all()
+      .map(toNotificationUser)
+  );
+  if (platformAdmins.length > 0) {
+    notifications.push({
+      kind: "open-refund-request",
+      actor: buyerAsRecipient,
+      recipients: platformAdmins,
+      courseTitle: course.title,
+      url: "/admin/refunds",
+      reason,
+    });
+  }
+
   return {
     ok: true,
     refundRequestId: refundRequest.id,
+    notifications,
     kind: kindOf(getSeats(db, purchase.id)),
     email: {
       to: buyer.email,
@@ -568,7 +616,9 @@ export function listTeamLicences(db: Queryable, buyerId: number, now: Date) {
 
 // ─── Deciding a Refund Request ───
 
-export type DecisionResult = { ok: true; email: Email } | Failure;
+export type DecisionResult =
+  | { ok: true; email: Email; notifications: Notification[] }
+  | Failure;
 
 function findOpenRefundRequest(
   tx: Queryable,
@@ -680,6 +730,13 @@ export function approveRefundRequest(
     return {
       ok: true,
       email: buildDecisionEmail(tx, purchase, RefundStatus.Approved, note),
+      notifications: [
+        {
+          kind: "refund-request-approved",
+          ...decisionAudience(tx, purchase, platformAdminId),
+          note,
+        },
+      ],
     };
   });
 }
@@ -728,8 +785,44 @@ export function declineRefundRequest(
         RefundStatus.Declined,
         trimmedNote
       ),
+      notifications: [
+        {
+          kind: "refund-request-declined",
+          ...decisionAudience(tx, found.purchase, platformAdminId),
+          note: trimmedNote,
+        },
+      ],
     };
   });
+}
+
+/**
+ * Who a decision Notification is from and to: the deciding Platform Admin
+ * tells the buyer, whichever kind of Purchase it was.
+ */
+function decisionAudience(
+  db: Queryable,
+  purchase: Purchase,
+  platformAdminId: number
+) {
+  const getUser = (id: number) => {
+    const user = db.select().from(users).where(eq(users.id, id)).get();
+    if (!user) throw new Error("User not found");
+    return toNotificationUser(user);
+  };
+  const course = db
+    .select()
+    .from(courses)
+    .where(eq(courses.id, purchase.courseId))
+    .get();
+  if (!course) throw new Error("Course not found");
+
+  return {
+    actor: getUser(platformAdminId),
+    recipients: [getUser(purchase.userId)],
+    courseTitle: course.title,
+    url: courseUrl(course.slug),
+  };
 }
 
 /** The email the buyer gets once their Refund Request is decided. */

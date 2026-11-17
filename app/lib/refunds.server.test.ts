@@ -502,3 +502,192 @@ describe("listing Refund Requests", () => {
     ]);
   });
 });
+
+describe("Refund Request Notifications", () => {
+  function raiseWith(purchaseId: number, buyerId: number) {
+    const result = raiseRefundRequest(
+      db,
+      purchaseId,
+      buyerId,
+      "It was not what I expected.",
+      NOW
+    );
+    if (!result.ok) throw new Error(result.error);
+    return result;
+  }
+
+  it("confirms to the buyer that their Refund Request was raised", () => {
+    const purchase = buyForSelf(base.user.id);
+
+    const { notifications } = raiseWith(purchase.id, base.user.id);
+
+    const raised = notifications.find((n) => n.kind === "refund-request-raised");
+    expect(raised).toMatchObject({
+      actor: { id: base.user.id, name: "Test User" },
+      recipients: [{ id: base.user.id, email: "test@example.com" }],
+      courseTitle: "Test Course",
+      url: "/courses/test-course",
+      reason: "It was not what I expected.",
+    });
+  });
+
+  function addPlatformAdmin(name: string) {
+    return db
+      .insert(schema.users)
+      .values({
+        name,
+        email: `${name.toLowerCase()}@example.com`,
+        role: UserRole.Admin,
+      })
+      .returning()
+      .get();
+  }
+
+  it("tells every Platform Admin about the new Open Refund Request in one Notification", () => {
+    const sam = addPlatformAdmin("Sam");
+    const purchase = buyForSelf(base.user.id);
+
+    const { notifications } = raiseWith(purchase.id, base.user.id);
+
+    const open = notifications.filter((n) => n.kind === "open-refund-request");
+    expect(open).toHaveLength(1);
+    expect(open[0]).toMatchObject({
+      actor: { id: base.user.id, name: "Test User" },
+      courseTitle: "Test Course",
+      url: "/admin/refunds",
+      reason: "It was not what I expected.",
+    });
+    expect(open[0].recipients.map((r) => r.id).sort()).toEqual(
+      [platformAdmin.id, sam.id].sort()
+    );
+  });
+
+  it("confirms to a Platform Admin raising on their own Purchase, without telling them about it as an Open Refund Request", () => {
+    const sam = addPlatformAdmin("Sam");
+    const purchase = buyForSelf(platformAdmin.id);
+
+    const { notifications } = raiseWith(purchase.id, platformAdmin.id);
+
+    expect(notifications.map((n) => n.kind)).toEqual([
+      "refund-request-raised",
+      "open-refund-request",
+    ]);
+    expect(notifications[0].recipients.map((r) => r.id)).toEqual([
+      platformAdmin.id,
+    ]);
+    expect(notifications[1].recipients.map((r) => r.id)).toEqual([sam.id]);
+  });
+
+  it("sends no Open Refund Request when the only Platform Admin is the buyer", () => {
+    const purchase = buyForSelf(platformAdmin.id);
+
+    const { notifications } = raiseWith(purchase.id, platformAdmin.id);
+
+    expect(notifications.map((n) => n.kind)).toEqual(["refund-request-raised"]);
+  });
+
+  it("treats a Team Licence buyer like any other buyer", () => {
+    const priya = addLearner("Priya");
+    const { purchase } = buySeats(priya.id, 2);
+
+    const { notifications } = raiseWith(purchase.id, priya.id);
+
+    expect(
+      notifications.map((n) => [n.kind, n.recipients.map((r) => r.id)])
+    ).toEqual([
+      ["refund-request-raised", [priya.id]],
+      ["open-refund-request", [platformAdmin.id]],
+    ]);
+  });
+
+  it("sends nothing when raising is refused", () => {
+    const purchase = buyForSelf(base.user.id);
+    raiseWith(purchase.id, base.user.id);
+
+    const second = raiseRefundRequest(db, purchase.id, base.user.id, "Again please.", NOW);
+
+    expect(second.ok).toBe(false);
+    expect("notifications" in second).toBe(false);
+  });
+
+  it("tells the buyer their Refund Request was approved, quoting the note", () => {
+    const purchase = buyForSelf(base.user.id);
+    const id = raise(purchase.id, base.user.id);
+
+    const result = approveRefundRequest(db, id, platformAdmin.id, "Sorry it didn't suit.", NOW);
+
+    if (!result.ok) throw new Error(result.error);
+    expect(result.notifications).toEqual([
+      {
+        kind: "refund-request-approved",
+        actor: {
+          id: platformAdmin.id,
+          name: "Pat Admin",
+          email: "pat@example.com",
+          avatarUrl: null,
+        },
+        recipients: [
+          {
+            id: base.user.id,
+            name: "Test User",
+            email: "test@example.com",
+            avatarUrl: null,
+          },
+        ],
+        courseTitle: "Test Course",
+        url: "/courses/test-course",
+        note: "Sorry it didn't suit.",
+      },
+    ]);
+  });
+
+  it("approves without a note", () => {
+    const purchase = buyForSelf(base.user.id);
+    const id = raise(purchase.id, base.user.id);
+
+    const result = approveRefundRequest(db, id, platformAdmin.id, null, NOW);
+
+    if (!result.ok) throw new Error(result.error);
+    expect(result.notifications).toMatchObject([
+      { kind: "refund-request-approved", note: null },
+    ]);
+  });
+
+  it("tells a Team Licence buyer their Refund Request was declined, quoting the note", () => {
+    const priya = addLearner("Priya");
+    const { purchase } = buySeats(priya.id, 1);
+    const id = raise(purchase.id, priya.id);
+
+    const result = declineRefundRequest(db, id, platformAdmin.id, "  Seats are in use.  ", NOW);
+
+    if (!result.ok) throw new Error(result.error);
+    expect(result.notifications).toMatchObject([
+      {
+        kind: "refund-request-declined",
+        actor: { id: platformAdmin.id, name: "Pat Admin" },
+        recipients: [{ id: priya.id, name: "Priya" }],
+        courseTitle: "Test Course",
+        url: "/courses/test-course",
+        note: "Seats are in use.",
+      },
+    ]);
+    expect(result.notifications[0].recipients).toHaveLength(1);
+  });
+
+  it("sends nothing when a decision is refused", () => {
+    const priya = addLearner("Priya");
+    const { purchase, seats } = buySeats(priya.id, 1);
+    const id = raise(purchase.id, priya.id);
+    claimSeat(seats[0].id, addLearner("Ben").id);
+
+    const refusedApproval = approveRefundRequest(db, id, platformAdmin.id, null, NOW);
+    const missingNote = declineRefundRequest(db, id, platformAdmin.id, " ", NOW);
+    declineRefundRequest(db, id, platformAdmin.id, "No.", NOW);
+    const alreadyDecided = declineRefundRequest(db, id, platformAdmin.id, "No.", NOW);
+
+    for (const result of [refusedApproval, missingNote, alreadyDecided]) {
+      expect(result.ok).toBe(false);
+      expect("notifications" in result).toBe(false);
+    }
+  });
+});
