@@ -64,9 +64,24 @@ function defaultTransport(): MailTransport {
   return token ? postmarkTransport(token) : outboxTransport(".outbox");
 }
 
+/**
+ * Sends after the write has already happened, so it never throws: a failed
+ * send is logged as one structured line and the action still succeeds.
+ */
 export async function sendEmail(
   email: Email,
   transport: MailTransport = defaultTransport()
 ): Promise<void> {
-  await transport.send(email);
+  try {
+    await transport.send(email);
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        event: "email_failed",
+        subject: email.subject,
+        to: email.to,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    );
+  }
 }
