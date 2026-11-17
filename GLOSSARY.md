@@ -103,6 +103,14 @@ _Avoid_: Alert, Message, Activity
 The list of a person's Notifications inside Cadence, newest first.
 _Avoid_: Inbox, Notification Center
 
+**Notification Category**:
+One of four groups of Notifications: Refunds, Team, Enrollments and Discussions. A person switches Notifications off by category, and filters the Notification Feed by category.
+_Avoid_: Type, Topic, Notification Type
+
+**Notification Preference**:
+Whether a person receives a Notification Category on a channel. Every Notification Category can be switched off, and Enrollments is off unless the person turns it on.
+_Avoid_: Subscription, Mute, Notification Setting
+
 ### Discussions
 
 **Discussion Question**:
