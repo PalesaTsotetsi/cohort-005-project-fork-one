@@ -72,6 +72,8 @@ Without Knock keys in `.env`, each Notification is written as JSON to `.outbox/n
 
 **Reseeding with Knock keys (development only):** `npm run db:seed` recreates users with the same ids, but Knock Development keeps their Notification Feeds. A reseeded user can see Notifications from before the reseed. If that matters, delete the user in the Knock dashboard.
 
+**Knock workflows (Development):** the eight Notification workflows are defined in `app/lib/notification-workflows.server.ts`. With `KNOCK_SERVICE_TOKEN`, `KNOCK_ENVIRONMENT=development` and `KNOCK_FEED_CHANNEL_ID` in `.env`, run `npm run knock:workflows`. It adds the four Notification Categories to Knock's catalog, then creates or updates and commits each workflow (one in-app feed step, its category, click action `{{ url }}`). Running it again is safe. To ship them, promote Development to Production with Knock's environment promotion.
+
 **Enrollments off by default (once per Knock environment):** New Enrollment Notifications are off unless a person turns them on. That default lives in each Knock environment's default preference set, which only Knock's [Management API](https://docs.knock.app/mapi-reference/environments/defaults) (or the dashboard) can write. It isn't committed or promoted, so run the script once in each environment:
 
 ```bash
@@ -105,20 +107,21 @@ You don't need these yet, but you'll be asked for them along the way. Both have 
 
 ## Scripts
 
-| Command                         | Description                                                       |
-| ------------------------------- | ----------------------------------------------------------------- |
-| `npm run dev`                   | Start the development server                                      |
-| `npm run build`                 | Build for production                                              |
-| `npm run test`                  | Run tests with Vitest                                             |
-| `npm run test:watch`            | Run tests in watch mode                                           |
-| `npm run typecheck`             | Type-check the project                                            |
-| `npm run db:generate`           | Generate a migration from the schema                              |
-| `npm run db:migrate`            | Run database migrations                                           |
-| `npm run db:seed`               | Reseed the database (drops and recreates it)                      |
-| `npm run knock:enrollments-off` | Turn Enrollments off in a Knock environment's default preferences |
-| `npm run reset <slug>`          | Reset your repo to a lesson checkpoint                            |
-| `npm run cherry-pick <slug>`    | Cherry-pick a lesson's solution                                   |
-| `npm run pull`                  | Merge the course repo's latest `main` in                          |
+| Command                         | Description                                                          |
+| ------------------------------- | -------------------------------------------------------------------- |
+| `npm run dev`                   | Start the development server                                         |
+| `npm run build`                 | Build for production                                                 |
+| `npm run test`                  | Run tests with Vitest                                                |
+| `npm run test:watch`            | Run tests in watch mode                                              |
+| `npm run typecheck`             | Type-check the project                                               |
+| `npm run db:generate`           | Generate a migration from the schema                                 |
+| `npm run db:migrate`            | Run database migrations                                              |
+| `npm run db:seed`               | Reseed the database (drops and recreates it)                         |
+| `npm run knock:enrollments-off` | Turn Enrollments off in a Knock environment's default preferences    |
+| `npm run knock:workflows`       | Create or update the Notification workflows in Knock and commit them |
+| `npm run reset <slug>`          | Reset your repo to a lesson checkpoint                               |
+| `npm run cherry-pick <slug>`    | Cherry-pick a lesson's solution                                      |
+| `npm run pull`                  | Merge the course repo's latest `main` in                             |
 
 ## Course Structure
 
