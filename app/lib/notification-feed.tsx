@@ -8,7 +8,13 @@ import {
   useState,
 } from "react";
 import { useRevalidator } from "react-router";
-import type { Feed, FeedItem, FeedStoreState } from "@knocklabs/client";
+import type Knock from "@knocklabs/client";
+import type {
+  Feed,
+  FeedItem,
+  FeedStoreState,
+  PreferenceSet,
+} from "@knocklabs/client";
 import {
   NOTIFICATION_CATEGORIES,
   type NotificationCategory,
@@ -359,4 +365,162 @@ export function NotificationFeedProvider({
 
 export function useNotificationFeed(): NotificationFeed {
   return useContext(NotificationFeedContext);
+}
+
+// ─── Notification Preferences ───
+// Read and written straight from the browser to Knock with the person's own
+// token. Knock holds every preference; Cadence keeps no copy (ADR 0014).
+
+export type NotificationPreferencesStatus = "loading" | "ready" | "unavailable";
+
+export type NotificationPreferences = {
+  status: NotificationPreferencesStatus;
+  /** Whether each category reaches the person's Notification Feed. */
+  enabled: Record<NotificationCategory, boolean>;
+  /**
+   * Flips one category at once, then saves it. If the save fails the switch
+   * flips back and the returned promise rejects.
+   */
+  setEnabled: (
+    category: NotificationCategory,
+    enabled: boolean
+  ) => Promise<void>;
+};
+
+export type NotificationPreferencesConnection = {
+  userId: number;
+  token: string;
+  publicKey: string;
+};
+
+// Knock's own defaults: every category is on except Enrollments, which the
+// environment default preference set turns off. Used only for a category
+// the person's stored set says nothing about.
+const DEFAULT_ENABLED: Record<NotificationCategory, boolean> = {
+  refunds: true,
+  team: true,
+  enrollments: false,
+  discussions: true,
+};
+
+type CategorySetting = NonNullable<
+  NonNullable<PreferenceSet["categories"]>[string]
+>;
+
+function inAppFeedEnabled(
+  setting: CategorySetting | undefined,
+  fallback: boolean
+): boolean {
+  if (typeof setting === "boolean") return setting;
+  if (setting && "channel_types" in setting) {
+    const inApp = setting.channel_types.in_app_feed;
+    if (typeof inApp === "boolean") return inApp;
+  }
+  return fallback;
+}
+
+function enabledFrom(
+  set: PreferenceSet
+): Record<NotificationCategory, boolean> {
+  const categories = set.categories ?? {};
+  return {
+    refunds: inAppFeedEnabled(categories.refunds, DEFAULT_ENABLED.refunds),
+    team: inAppFeedEnabled(categories.team, DEFAULT_ENABLED.team),
+    enrollments: inAppFeedEnabled(
+      categories.enrollments,
+      DEFAULT_ENABLED.enrollments
+    ),
+    discussions: inAppFeedEnabled(
+      categories.discussions,
+      DEFAULT_ENABLED.discussions
+    ),
+  };
+}
+
+/**
+ * The session user's Notification Preferences. With no connection (Knock
+ * keys missing, or identifying the person failed) or any read error from
+ * Knock, the status is "unavailable" and no positions are shown as theirs.
+ */
+export function useNotificationPreferences(
+  connection: NotificationPreferencesConnection | null
+): NotificationPreferences {
+  const userId = connection?.userId ?? null;
+  const token = connection?.token ?? null;
+  const publicKey = connection?.publicKey ?? null;
+
+  const [status, setStatus] = useState<NotificationPreferencesStatus>(
+    connection ? "loading" : "unavailable"
+  );
+  const [enabled, setEnabledState] =
+    useState<Record<NotificationCategory, boolean>>(DEFAULT_ENABLED);
+  const knockRef = useRef<Knock | null>(null);
+  const enabledRef = useRef(enabled);
+  enabledRef.current = enabled;
+
+  useEffect(() => {
+    if (userId === null || token === null || publicKey === null) {
+      setStatus("unavailable");
+      return;
+    }
+    let cancelled = false;
+    let knock: Knock | null = null;
+    setStatus("loading");
+
+    async function connect(id: number, userToken: string, key: string) {
+      const { default: KnockClient } = await import("@knocklabs/client");
+      if (cancelled) return;
+      knock = new KnockClient(key);
+      knock.authenticate({ id: String(id) }, userToken, {
+        identificationStrategy: "skip",
+      });
+      const set = await knock.user.getPreferences();
+      if (cancelled) return;
+      knockRef.current = knock;
+      setEnabledState(enabledFrom(set));
+      setStatus("ready");
+    }
+
+    connect(userId, token, publicKey).catch((error) => {
+      if (cancelled) return;
+      console.warn(
+        "Notification Preferences unavailable:",
+        error instanceof Error ? error.message : String(error)
+      );
+      setStatus("unavailable");
+    });
+
+    return () => {
+      cancelled = true;
+      if (knockRef.current === knock) knockRef.current = null;
+      knock?.teardown();
+    };
+  }, [userId, token, publicKey]);
+
+  const setEnabled = useCallback(
+    async (category: NotificationCategory, value: boolean) => {
+      const knock = knockRef.current;
+      if (!knock) throw new Error("Notification Preferences are unavailable.");
+      const previous = enabledRef.current[category];
+      setEnabledState((current) => ({ ...current, [category]: value }));
+      // A merge of only the switch that moved: writing the whole set would
+      // pin the person to today's defaults (ADR 0014). The client SDK's type
+      // has no __persistence_strategy__, but it sends the body as given.
+      const change = {
+        __persistence_strategy__: "merge",
+        categories: {
+          [category]: { channel_types: { in_app_feed: value } },
+        },
+      };
+      try {
+        await knock.user.setPreferences(change);
+      } catch (error) {
+        setEnabledState((current) => ({ ...current, [category]: previous }));
+        throw error;
+      }
+    },
+    []
+  );
+
+  return { status, enabled, setEnabled };
 }

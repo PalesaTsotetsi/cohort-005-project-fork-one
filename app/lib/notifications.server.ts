@@ -103,17 +103,29 @@ export interface NotificationTransport {
   trigger(trigger: KnockTrigger, notification: Notification): Promise<void>;
 }
 
-export type RecordingTransport = NotificationTransport & {
-  triggers: KnockTrigger[];
-};
+/** Upserts a person in Knock before the browser reads their preferences. */
+export interface IdentifyTransport {
+  identify(user: KnockUser): Promise<void>;
+}
 
-/** For tests: keeps every trigger instead of sending it. */
+export type RecordingTransport = NotificationTransport &
+  IdentifyTransport & {
+    triggers: KnockTrigger[];
+    identified: KnockUser[];
+  };
+
+/** For tests: keeps every trigger and identify call instead of sending it. */
 export function recordingTransport(): RecordingTransport {
   const triggers: KnockTrigger[] = [];
+  const identified: KnockUser[] = [];
   return {
     triggers,
+    identified,
     async trigger(trigger) {
       triggers.push(trigger);
+    },
+    async identify(user) {
+      identified.push(user);
     },
   };
 }
@@ -140,7 +152,9 @@ export function outboxTransport(directory: string): NotificationTransport {
 const KNOCK_MAX_RETRIES = 2;
 const KNOCK_TIMEOUT_MS = 3_000;
 
-export function knockTransport(secretApiKey: string): NotificationTransport {
+export function knockTransport(
+  secretApiKey: string
+): NotificationTransport & IdentifyTransport {
   const knock = new Knock({
     apiKey: secretApiKey,
     maxRetries: KNOCK_MAX_RETRIES,
@@ -153,6 +167,9 @@ export function knockTransport(secretApiKey: string): NotificationTransport {
         recipients: trigger.recipients,
         data: trigger.data,
       });
+    },
+    async identify({ id, ...properties }) {
+      await knock.users.update(id, properties);
     },
   };
 }
@@ -187,6 +204,41 @@ export async function sendNotification(
         error: error instanceof Error ? error.message : String(error),
       })
     );
+  }
+}
+
+/**
+ * Only Knock can identify: without KNOCK_SECRET_API_KEY there is nothing to
+ * identify with, so this is null and preferences are unavailable.
+ */
+export function defaultIdentifyTransport(): IdentifyTransport | null {
+  const secretApiKey = process.env.KNOCK_SECRET_API_KEY;
+  return secretApiKey ? knockTransport(secretApiKey) : null;
+}
+
+/**
+ * Sends the person's id, name, email and avatar to Knock, so the browser can
+ * read and write their preferences. Never throws: resolves false when there
+ * is no key or Knock fails (logged as one structured line), and the caller
+ * shows preferences as unavailable.
+ */
+export async function identifyNotificationUser(
+  user: NotificationUser,
+  transport: IdentifyTransport | null = defaultIdentifyTransport()
+): Promise<boolean> {
+  if (transport === null) return false;
+  try {
+    await transport.identify(toKnockUser(user));
+    return true;
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        event: "identify_failed",
+        userId: user.id,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    );
+    return false;
   }
 }
 

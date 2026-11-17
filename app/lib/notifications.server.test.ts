@@ -5,11 +5,13 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Notification, NotificationUser } from "./notifications";
 import {
+  identifyNotificationUser,
   outboxTransport,
   recordingTransport,
   sendNotification,
   signUserToken,
   toKnockTrigger,
+  type IdentifyTransport,
   type NotificationTransport,
 } from "./notifications.server";
 
@@ -372,5 +374,43 @@ describe("signUserToken", () => {
 
     expect(token.verified).toBe(true);
     expect(token.payload.sub).toBe("2");
+  });
+});
+
+describe("identifyNotificationUser", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("sends the person's id, name, email and avatar, and reports success", async () => {
+    const transport = recordingTransport();
+
+    const identified = await identifyNotificationUser(emma, transport);
+
+    expect(identified).toBe(true);
+    expect(transport.identified).toEqual([emmaInKnock]);
+  });
+
+  it("reports failure and logs one structured line when the transport throws", async () => {
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
+    const failing: IdentifyTransport = {
+      async identify() {
+        throw new Error("Knock is down");
+      },
+    };
+
+    await expect(identifyNotificationUser(sarah, failing)).resolves.toBe(false);
+
+    expect(errorLog).toHaveBeenCalledTimes(1);
+    const line = JSON.parse(String(errorLog.mock.calls[0][0]));
+    expect(line).toEqual({
+      event: "identify_failed",
+      userId: 2,
+      error: "Knock is down",
+    });
+  });
+
+  it("reports failure when there is no Knock key to identify with", async () => {
+    await expect(identifyNotificationUser(pat, null)).resolves.toBe(false);
   });
 });

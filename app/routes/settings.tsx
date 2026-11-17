@@ -17,6 +17,13 @@ import { db } from "~/db";
 import { eq } from "drizzle-orm";
 import { formatPrice } from "~/lib/utils";
 import { listRefundRequestsForBuyer } from "~/lib/refunds.server";
+import { listNotificationSwitches } from "~/lib/notification-preferences.server";
+import {
+  identifyNotificationUser,
+  notificationFeedConfig,
+} from "~/lib/notifications.server";
+import { toNotificationUser } from "~/lib/notifications";
+import { NotificationPreferencesSection } from "~/components/notification-preferences-section";
 
 const settingsSchema = z.object({
   name: z.string().trim().min(1, "Name cannot be empty."),
@@ -28,6 +35,21 @@ export function meta() {
     { title: "Settings — Cadence" },
     { name: "description", content: "Edit your profile details" },
   ];
+}
+
+/**
+ * Which switches this person sees, and how the browser reaches Knock for
+ * their positions. Knock must know the person before the browser reads their
+ * preferences, so they're identified first; if that fails, or a key is
+ * missing, there is no connection and the section says it's unavailable.
+ */
+async function loadNotificationSettings(user: typeof users.$inferSelect) {
+  const switches = listNotificationSwitches(db, user.id);
+  const identified = await identifyNotificationUser(toNotificationUser(user));
+  if (!identified) return { switches, connection: null };
+  const { token, publicKey } = await notificationFeedConfig(user.id);
+  if (!token || !publicKey) return { switches, connection: null };
+  return { switches, connection: { userId: user.id, token, publicKey } };
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
@@ -52,6 +74,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   const refundRequests = listRefundRequestsForBuyer(db, currentUserId);
 
   return {
+    notifications: await loadNotificationSettings(currentUser),
     user: {
       id: currentUser.id,
       name: currentUser.name,
@@ -98,7 +121,7 @@ export async function action({ request }: Route.ActionArgs) {
 }
 
 export default function Settings({ loaderData }: Route.ComponentProps) {
-  const { user, refundRequests } = loaderData;
+  const { user, refundRequests, notifications } = loaderData;
   const openCount = refundRequests.filter(
     (refundRequest) => refundRequest.status === RefundStatus.Open
   ).length;
@@ -235,6 +258,11 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
           </CardContent>
         </Card>
       )}
+
+      <NotificationPreferencesSection
+        switches={notifications.switches}
+        connection={notifications.connection}
+      />
     </div>
   );
 }
