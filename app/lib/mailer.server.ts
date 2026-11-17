@@ -1,5 +1,6 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { logFailure } from "~/lib/log.server";
 
 // ─── Transactional email ───
 // Postmark delivers every email when POSTMARK_SERVER_TOKEN is set. Without a
@@ -75,13 +76,6 @@ export async function sendEmail(
   try {
     await transport.send(email);
   } catch (error) {
-    console.error(
-      JSON.stringify({
-        event: "email_failed",
-        subject: email.subject,
-        to: email.to,
-        error: error instanceof Error ? error.message : String(error),
-      })
-    );
+    logFailure("email_failed", { subject: email.subject, to: email.to }, error);
   }
 }

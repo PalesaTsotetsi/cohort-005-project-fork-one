@@ -85,6 +85,8 @@ KNOCK_ENVIRONMENT=production npm run knock:enrollments-off
 
 It reads the environment's current defaults, keeps everything in them, sets `categories.enrollments.channel_types.in_app_feed: false`, and writes only if that changes anything. Running it again is safe.
 
+> **`KNOCK_ENVIRONMENT` must be the environment your `KNOCK_SECRET_API_KEY` belongs to.** The service token is account-wide, so the script writes whichever environment you name and can't tell it apart from the one the app sends to. If they differ, the script succeeds but the app's Knock environment keeps Enrollments on.
+
 ### What `fork` does
 
 `npx ai-hero-cli fork` turns your clone into your own repo:

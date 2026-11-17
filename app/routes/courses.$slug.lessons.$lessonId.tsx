@@ -10,7 +10,7 @@ import {
   type RenderedComment,
 } from "~/components/comment-thread";
 import { assertValidBody, postToDiscussion } from "~/lib/discussions.server";
-import { sendNotification } from "~/lib/notifications.server";
+import { sendNotifications } from "~/lib/notifications.server";
 import { db } from "~/db";
 import {
   categories,
@@ -862,9 +862,7 @@ export async function action({ params, request }: Route.ActionArgs) {
           parsed.data.parentId ?? null,
           parsed.data.body
         );
-        for (const notification of notifications) {
-          await sendNotification(notification);
-        }
+        await sendNotifications(notifications);
         return { ok: true };
       }
 

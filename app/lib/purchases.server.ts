@@ -8,14 +8,13 @@ import {
   teamMembers,
   teams,
   TeamMemberRole,
-  users,
 } from "~/db/schema";
 import {
   courseStudentsUrl,
   othersThan,
-  toNotificationUser,
   type Notification,
 } from "~/lib/notifications";
+import { getNotificationUser } from "~/lib/notification-users.server";
 import type { Db } from "~/lib/refunds.server";
 
 // ─── Purchases ───
@@ -31,14 +30,6 @@ export type IndividualPurchaseResult = {
   enrollment: Enrollment;
   notifications: Notification[];
 };
-
-function getUser(db: Db, userId: number) {
-  const user = db.select().from(users).where(eq(users.id, userId)).get();
-  if (!user) {
-    throw new Error("User not found");
-  }
-  return toNotificationUser(user);
-}
 
 /**
  * Records an Individual Purchase and enrolls the buyer. New Enrollment goes
@@ -78,8 +69,10 @@ export function buyIndividualPurchase(
     .returning()
     .get();
 
-  const actor = getUser(db, buyerId);
-  const recipients = othersThan(actor, [getUser(db, course.instructorId)]);
+  const actor = getNotificationUser(db, buyerId);
+  const recipients = othersThan(actor, [
+    getNotificationUser(db, course.instructorId),
+  ]);
   if (recipients.length === 0) {
     return { purchase, enrollment, notifications: [] };
   }

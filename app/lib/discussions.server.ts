@@ -1,12 +1,8 @@
 import { eq } from "drizzle-orm";
-import { comments, courses, lessons, modules, users } from "~/db/schema";
+import { comments, courses, lessons, modules } from "~/db/schema";
 import { MAX_COMMENT_LENGTH, MIN_COMMENT_LENGTH } from "~/lib/comments";
-import {
-  lessonUrl,
-  othersThan,
-  toNotificationUser,
-  type Notification,
-} from "~/lib/notifications";
+import { lessonUrl, othersThan, type Notification } from "~/lib/notifications";
+import { getNotificationUser } from "~/lib/notification-users.server";
 import type { Db } from "~/lib/refunds.server";
 
 // ─── Discussions ───
@@ -49,14 +45,6 @@ function getLessonWithCourse(db: Db, lessonId: number) {
     .innerJoin(courses, eq(modules.courseId, courses.id))
     .where(eq(lessons.id, lessonId))
     .get();
-}
-
-function getUser(db: Db, userId: number) {
-  const user = db.select().from(users).where(eq(users.id, userId)).get();
-  if (!user) {
-    throw new Error("User not found");
-  }
-  return toNotificationUser(user);
 }
 
 /**
@@ -102,9 +90,9 @@ export function postToDiscussion(
     .returning()
     .get();
 
-  const actor = getUser(db, posterId);
+  const actor = getNotificationUser(db, posterId);
   const recipients = othersThan(actor, [
-    getUser(db, question ? question.userId : lesson.instructorId),
+    getNotificationUser(db, question ? question.userId : lesson.instructorId),
   ]);
   if (recipients.length === 0) {
     return { comment, notifications: [] };

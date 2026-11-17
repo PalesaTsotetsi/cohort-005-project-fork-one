@@ -16,7 +16,7 @@ import { MAX_COMMENT_LENGTH } from "~/lib/comments";
 import { parseFormData } from "~/lib/validation";
 import { postToDiscussion } from "~/lib/discussions.server";
 import type { Notification } from "~/lib/notifications";
-import { sendNotification } from "~/lib/notifications.server";
+import { sendNotifications } from "~/lib/notifications.server";
 import { db } from "~/db";
 import {
   comments,
@@ -189,9 +189,7 @@ export async function action({ request }: Route.ActionArgs) {
     throw error;
   }
 
-  for (const notification of notifications) {
-    await sendNotification(notification);
-  }
+  await sendNotifications(notifications);
 
   return { ok: true };
 }

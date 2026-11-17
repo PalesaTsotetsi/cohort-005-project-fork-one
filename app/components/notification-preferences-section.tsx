@@ -8,12 +8,8 @@ import {
 import {
   CATEGORY_LABELS,
   type NotificationCategory,
+  type NotificationSwitch,
 } from "~/lib/notifications";
-
-type NotificationSwitch = {
-  category: NotificationCategory;
-  description: string;
-};
 
 type SaveState = "saving" | "saved" | "failed";
 

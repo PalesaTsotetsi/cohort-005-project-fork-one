@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import Knock, { signUserToken as knockSignUserToken } from "@knocklabs/node";
+import { logFailure } from "~/lib/log.server";
 import type {
   Notification,
   NotificationKind,
@@ -176,12 +177,18 @@ export function knockTransport(
 
 const OUTBOX_DIRECTORY = join(".outbox", "notifications");
 
-/** Reads the key on every call, so the .env loaded at startup applies. */
-export function defaultTransport(): NotificationTransport {
+/**
+ * Knock, when KNOCK_SECRET_API_KEY is set. Reads the key on every call, so
+ * the .env loaded at startup applies.
+ */
+function knockTransportFromEnv():
+  (NotificationTransport & IdentifyTransport) | null {
   const secretApiKey = process.env.KNOCK_SECRET_API_KEY;
-  return secretApiKey
-    ? knockTransport(secretApiKey)
-    : outboxTransport(OUTBOX_DIRECTORY);
+  return secretApiKey ? knockTransport(secretApiKey) : null;
+}
+
+export function defaultTransport(): NotificationTransport {
+  return knockTransportFromEnv() ?? outboxTransport(OUTBOX_DIRECTORY);
 }
 
 /**
@@ -196,14 +203,27 @@ export async function sendNotification(
   try {
     await transport.trigger(toKnockTrigger(notification), notification);
   } catch (error) {
-    console.error(
-      JSON.stringify({
-        event: "notification_failed",
+    logFailure(
+      "notification_failed",
+      {
         kind: notification.kind,
         recipientIds: notification.recipients.map((r) => r.id),
-        error: error instanceof Error ? error.message : String(error),
-      })
+      },
+      error
     );
+  }
+}
+
+/**
+ * Sends each Notification in turn, like sendNotification: never throws, and
+ * one failing doesn't stop the rest.
+ */
+export async function sendNotifications(
+  notifications: Notification[],
+  transport: NotificationTransport = defaultTransport()
+): Promise<void> {
+  for (const notification of notifications) {
+    await sendNotification(notification, transport);
   }
 }
 
@@ -212,8 +232,7 @@ export async function sendNotification(
  * identify with, so this is null and preferences are unavailable.
  */
 export function defaultIdentifyTransport(): IdentifyTransport | null {
-  const secretApiKey = process.env.KNOCK_SECRET_API_KEY;
-  return secretApiKey ? knockTransport(secretApiKey) : null;
+  return knockTransportFromEnv();
 }
 
 /**
@@ -231,13 +250,7 @@ export async function identifyNotificationUser(
     await transport.identify(toKnockUser(user));
     return true;
   } catch (error) {
-    console.error(
-      JSON.stringify({
-        event: "identify_failed",
-        userId: user.id,
-        error: error instanceof Error ? error.message : String(error),
-      })
-    );
+    logFailure("identify_failed", { userId: user.id }, error);
     return false;
   }
 }
@@ -295,13 +308,7 @@ export async function notificationFeedConfig(
     const token = await signUserToken(userId, signingKey);
     return { token, publicKey, feedChannelId };
   } catch (error) {
-    console.error(
-      JSON.stringify({
-        event: "user_token_failed",
-        userId,
-        error: error instanceof Error ? error.message : String(error),
-      })
-    );
+    logFailure("user_token_failed", { userId }, error);
     return { token: null, publicKey, feedChannelId };
   }
 }

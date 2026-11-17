@@ -9,6 +9,7 @@ import {
   outboxTransport,
   recordingTransport,
   sendNotification,
+  sendNotifications,
   signUserToken,
   toKnockTrigger,
   type IdentifyTransport,
@@ -334,6 +335,59 @@ describe("sendNotification", () => {
     expect(files).toHaveLength(1);
     const written = JSON.parse(readFileSync(join(directory, files[0]), "utf8"));
     expect(written).toEqual({ workflow: "discussion-question", notification: question });
+  });
+});
+
+describe("sendNotifications", () => {
+  const raised: Notification = {
+    kind: "refund-request-raised",
+    actor: sarah,
+    recipients: [emma],
+    courseTitle: "Introduction to TypeScript",
+    url: "/courses/intro-ts",
+    reason: "Not for me",
+  };
+  const open: Notification = {
+    kind: "open-refund-request",
+    actor: emma,
+    recipients: [pat],
+    courseTitle: "Introduction to TypeScript",
+    url: "/admin/refunds",
+    reason: "Not for me",
+  };
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("sends each Notification in order", async () => {
+    const transport = recordingTransport();
+
+    await sendNotifications([raised, open], transport);
+
+    expect(transport.triggers.map((t) => t.workflow)).toEqual([
+      "refund-request-raised",
+      "open-refund-request",
+    ]);
+  });
+
+  it("still sends the rest when one fails, and resolves", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const sent: string[] = [];
+    const transport: NotificationTransport = {
+      async trigger(trigger) {
+        if (trigger.workflow === "refund-request-raised") {
+          throw new Error("Knock is down");
+        }
+        sent.push(trigger.workflow);
+      },
+    };
+
+    await expect(
+      sendNotifications([raised, open], transport)
+    ).resolves.toBeUndefined();
+
+    expect(sent).toEqual(["open-refund-request"]);
   });
 });
 

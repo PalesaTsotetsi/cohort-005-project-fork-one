@@ -17,6 +17,7 @@ import type {
 } from "@knocklabs/client";
 import {
   NOTIFICATION_CATEGORIES,
+  NOTIFICATION_KINDS,
   type NotificationCategory,
   type NotificationKind,
 } from "~/lib/notifications";
@@ -80,19 +81,8 @@ export type NotificationFeedConnection = {
   feedChannelId: string | null;
 };
 
-const KINDS: NotificationKind[] = [
-  "refund-request-raised",
-  "refund-request-approved",
-  "refund-request-declined",
-  "open-refund-request",
-  "seat-claimed",
-  "new-enrollment",
-  "discussion-question",
-  "discussion-reply",
-];
-
 function isKind(key: string): key is NotificationKind {
-  return KINDS.some((kind) => kind === key);
+  return NOTIFICATION_KINDS.some((kind) => kind === key);
 }
 
 function isCategory(key: string): key is NotificationCategory {
@@ -393,49 +383,41 @@ export type NotificationPreferencesConnection = {
   publicKey: string;
 };
 
-// Knock's own defaults: every category is on except Enrollments, which the
-// environment default preference set turns off. Used only for a category
-// the person's stored set says nothing about.
-const DEFAULT_ENABLED: Record<NotificationCategory, boolean> = {
-  refunds: true,
-  team: true,
-  enrollments: false,
-  discussions: true,
-};
-
 type CategorySetting = NonNullable<
   NonNullable<PreferenceSet["categories"]>[string]
 >;
 
-function inAppFeedEnabled(
-  setting: CategorySetting | undefined,
-  fallback: boolean
-): boolean {
+// When Knock says nothing about a category it delivers it, so the switch
+// shows on. "Enrollments off" comes only from the Knock environment default
+// set (ADR 0014); Cadence keeps no default of its own.
+function inAppFeedEnabled(setting: CategorySetting | undefined): boolean {
   if (typeof setting === "boolean") return setting;
   if (setting && "channel_types" in setting) {
     const inApp = setting.channel_types.in_app_feed;
     if (typeof inApp === "boolean") return inApp;
   }
-  return fallback;
+  return true;
 }
 
-function enabledFrom(
+/** Whether each category reaches the Feed, as Knock's preference set says. */
+export function enabledFromPreferenceSet(
   set: PreferenceSet
 ): Record<NotificationCategory, boolean> {
   const categories = set.categories ?? {};
   return {
-    refunds: inAppFeedEnabled(categories.refunds, DEFAULT_ENABLED.refunds),
-    team: inAppFeedEnabled(categories.team, DEFAULT_ENABLED.team),
-    enrollments: inAppFeedEnabled(
-      categories.enrollments,
-      DEFAULT_ENABLED.enrollments
-    ),
-    discussions: inAppFeedEnabled(
-      categories.discussions,
-      DEFAULT_ENABLED.discussions
-    ),
+    refunds: inAppFeedEnabled(categories.refunds),
+    team: inAppFeedEnabled(categories.team),
+    enrollments: inAppFeedEnabled(categories.enrollments),
+    discussions: inAppFeedEnabled(categories.discussions),
   };
 }
+
+const ALL_ENABLED: Record<NotificationCategory, boolean> = {
+  refunds: true,
+  team: true,
+  enrollments: true,
+  discussions: true,
+};
 
 /**
  * The session user's Notification Preferences. With no connection (Knock
@@ -453,7 +435,7 @@ export function useNotificationPreferences(
     connection ? "loading" : "unavailable"
   );
   const [enabled, setEnabledState] =
-    useState<Record<NotificationCategory, boolean>>(DEFAULT_ENABLED);
+    useState<Record<NotificationCategory, boolean>>(ALL_ENABLED);
   const knockRef = useRef<Knock | null>(null);
   const enabledRef = useRef(enabled);
   enabledRef.current = enabled;
@@ -477,7 +459,7 @@ export function useNotificationPreferences(
       const set = await knock.user.getPreferences();
       if (cancelled) return;
       knockRef.current = knock;
-      setEnabledState(enabledFrom(set));
+      setEnabledState(enabledFromPreferenceSet(set));
       setStatus("ready");
     }
 

@@ -1,17 +1,11 @@
 import { eq } from "drizzle-orm";
 import { coupons, purchases, UserRole, users } from "~/db/schema";
 import type { Db } from "~/lib/refunds.server";
-import type { NotificationCategory } from "~/lib/notifications";
+import type { NotificationSwitch } from "~/lib/notifications";
 
 // ─── Which Notification Preference switches a person is shown ───
 // Cadence decides only which switches show. Whether each is on or off lives
 // in Knock and is never read or written here (ADR 0014).
-
-export type NotificationSwitch = {
-  category: NotificationCategory;
-  /** What this category covers for this person. */
-  description: string;
-};
 
 function refundsDescription(
   hasPurchase: boolean,

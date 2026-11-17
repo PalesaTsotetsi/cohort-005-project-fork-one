@@ -1,11 +1,11 @@
 import { and, eq } from "drizzle-orm";
-import { coupons, courses, enrollments, purchases, users } from "~/db/schema";
+import { coupons, courses, enrollments, purchases } from "~/db/schema";
 import {
   courseStudentsUrl,
   othersThan,
-  toNotificationUser,
   type Notification,
 } from "~/lib/notifications";
+import { getNotificationUser } from "~/lib/notification-users.server";
 import { getSeatAvailability, type Db } from "~/lib/refunds.server";
 
 // ─── Claiming a Seat ───
@@ -26,14 +26,6 @@ export type ClaimResult =
       notifications: Notification[];
     }
   | { ok: false; error: string };
-
-function getUser(db: Db, userId: number) {
-  const user = db.select().from(users).where(eq(users.id, userId)).get();
-  if (!user) {
-    throw new Error("User not found");
-  }
-  return toNotificationUser(user);
-}
 
 /**
  * Claims the Seat `code` for `claimerId`, who is in `claimerCountry`. Refuses
@@ -115,10 +107,12 @@ export function claimSeat(
       .get();
   });
 
-  const actor = getUser(db, claimerId);
+  const actor = getNotificationUser(db, claimerId);
   const notifications: Notification[] = [];
 
-  const teamAdmins = othersThan(actor, [getUser(db, teamLicence.userId)]);
+  const teamAdmins = othersThan(actor, [
+    getNotificationUser(db, teamLicence.userId),
+  ]);
   if (teamAdmins.length > 0) {
     notifications.push({
       kind: "seat-claimed",
@@ -129,7 +123,9 @@ export function claimSeat(
     });
   }
 
-  const instructors = othersThan(actor, [getUser(db, course.instructorId)]);
+  const instructors = othersThan(actor, [
+    getNotificationUser(db, course.instructorId),
+  ]);
   if (instructors.length > 0) {
     notifications.push({
       kind: "new-enrollment",

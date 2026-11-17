@@ -32,7 +32,7 @@ import { formatDuration, formatPrice } from "~/lib/utils";
 import { resolveCountry } from "~/lib/country.server";
 import { calculatePppPrice, getCountryTierInfo, COUNTRIES } from "~/lib/ppp";
 import { parseFormData, parseParams } from "~/lib/validation";
-import { sendNotification } from "~/lib/notifications.server";
+import { sendNotifications } from "~/lib/notifications.server";
 import {
   buyIndividualPurchase,
   buyTeamLicence,
@@ -260,9 +260,7 @@ export async function action({ params, request }: Route.ActionArgs) {
       pppPrice,
       country
     );
-    for (const notification of result.notifications) {
-      await sendNotification(notification);
-    }
+    await sendNotifications(result.notifications);
     throw redirect(`/courses/${slug}/welcome`);
   }
 

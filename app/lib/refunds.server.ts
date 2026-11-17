@@ -25,11 +25,13 @@ import {
   type RuleBreak,
 } from "~/lib/refund-rules";
 import {
+  adminRefundsUrl,
   courseUrl,
   othersThan,
   toNotificationUser,
   type Notification,
 } from "~/lib/notifications";
+import { getNotificationUser } from "~/lib/notification-users.server";
 
 // ─── Refunds ───
 // Everything about Refund Requests: whether a Purchase may be refunded, raising
@@ -41,7 +43,7 @@ import {
 
 export type Db = BetterSQLite3Database<typeof schema>;
 type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
-type Queryable = Db | Tx;
+export type Queryable = Db | Tx;
 
 type Purchase = typeof purchases.$inferSelect;
 type Seat = typeof coupons.$inferSelect;
@@ -429,7 +431,7 @@ export function raiseRefundRequest(
       actor: buyerAsRecipient,
       recipients: platformAdmins,
       courseTitle: course.title,
-      url: "/admin/refunds",
+      url: adminRefundsUrl(),
       reason,
     });
   }
@@ -805,11 +807,6 @@ function decisionAudience(
   purchase: Purchase,
   platformAdminId: number
 ) {
-  const getUser = (id: number) => {
-    const user = db.select().from(users).where(eq(users.id, id)).get();
-    if (!user) throw new Error("User not found");
-    return toNotificationUser(user);
-  };
   const course = db
     .select()
     .from(courses)
@@ -818,8 +815,8 @@ function decisionAudience(
   if (!course) throw new Error("Course not found");
 
   return {
-    actor: getUser(platformAdminId),
-    recipients: [getUser(purchase.userId)],
+    actor: getNotificationUser(db, platformAdminId),
+    recipients: [getNotificationUser(db, purchase.userId)],
     courseTitle: course.title,
     url: courseUrl(course.slug),
   };
