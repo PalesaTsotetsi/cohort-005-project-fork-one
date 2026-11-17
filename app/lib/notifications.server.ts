@@ -189,3 +189,10 @@ export async function sendNotification(
     );
   }
 }
+
+// The environment default preference set ("Enrollments off") is written
+// through Knock's Management API; see notification-defaults.server.ts.
+export {
+  setEnrollmentsOffByDefault,
+  type EnvironmentDefaultsResult,
+} from "~/lib/notification-defaults.server";
