@@ -72,6 +72,19 @@ Without Knock keys in `.env`, each Notification is written as JSON to `.outbox/n
 
 **Reseeding with Knock keys (development only):** `npm run db:seed` recreates users with the same ids, but Knock Development keeps their Notification Feeds. A reseeded user can see Notifications from before the reseed. If that matters, delete the user in the Knock dashboard.
 
+**Enrollments off by default (once per Knock environment):** New Enrollment Notifications are off unless a person turns them on. That default lives in each Knock environment's default preference set, which only Knock's [Management API](https://docs.knock.app/mapi-reference/environments/defaults) (or the dashboard) can write. It isn't committed or promoted, so run the script once in each environment:
+
+```bash
+# Development: put KNOCK_SERVICE_TOKEN (Dashboard → Settings → Service tokens, knock_st_…)
+# and KNOCK_ENVIRONMENT=development in .env, then:
+npm run knock:enrollments-off
+
+# Production: same token, a different slug
+KNOCK_ENVIRONMENT=production npm run knock:enrollments-off
+```
+
+It reads the environment's current defaults, keeps everything in them, sets `categories.enrollments.channel_types.in_app_feed: false`, and writes only if that changes anything. Running it again is safe.
+
 ### What `fork` does
 
 `npx ai-hero-cli fork` turns your clone into your own repo:
@@ -90,19 +103,20 @@ You don't need these yet, but you'll be asked for them along the way. Both have 
 
 ## Scripts
 
-| Command                      | Description                                  |
-| ---------------------------- | -------------------------------------------- |
-| `npm run dev`                | Start the development server                 |
-| `npm run build`              | Build for production                         |
-| `npm run test`               | Run tests with Vitest                        |
-| `npm run test:watch`         | Run tests in watch mode                      |
-| `npm run typecheck`          | Type-check the project                       |
-| `npm run db:generate`        | Generate a migration from the schema         |
-| `npm run db:migrate`         | Run database migrations                      |
-| `npm run db:seed`            | Reseed the database (drops and recreates it) |
-| `npm run reset <slug>`       | Reset your repo to a lesson checkpoint       |
-| `npm run cherry-pick <slug>` | Cherry-pick a lesson's solution              |
-| `npm run pull`               | Merge the course repo's latest `main` in     |
+| Command                         | Description                                                       |
+| ------------------------------- | ----------------------------------------------------------------- |
+| `npm run dev`                   | Start the development server                                      |
+| `npm run build`                 | Build for production                                              |
+| `npm run test`                  | Run tests with Vitest                                             |
+| `npm run test:watch`            | Run tests in watch mode                                           |
+| `npm run typecheck`             | Type-check the project                                            |
+| `npm run db:generate`           | Generate a migration from the schema                              |
+| `npm run db:migrate`            | Run database migrations                                           |
+| `npm run db:seed`               | Reseed the database (drops and recreates it)                      |
+| `npm run knock:enrollments-off` | Turn Enrollments off in a Knock environment's default preferences |
+| `npm run reset <slug>`          | Reset your repo to a lesson checkpoint                            |
+| `npm run cherry-pick <slug>`    | Cherry-pick a lesson's solution                                   |
+| `npm run pull`                  | Merge the course repo's latest `main` in                          |
 
 ## Course Structure
 
