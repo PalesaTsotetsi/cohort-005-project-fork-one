@@ -68,6 +68,10 @@ npm run dev
 
 The app will be running at `http://localhost:5173`. Use the floating DevUI panel to switch between users.
 
+Without Knock keys in `.env`, each Notification is written as JSON to `.outbox/notifications/` instead of being sent.
+
+**Reseeding with Knock keys (development only):** `npm run db:seed` recreates users with the same ids, but Knock Development keeps their Notification Feeds. A reseeded user can see Notifications from before the reseed. If that matters, delete the user in the Knock dashboard.
+
 ### What `fork` does
 
 `npx ai-hero-cli fork` turns your clone into your own repo:
