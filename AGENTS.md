@@ -3,14 +3,16 @@
 Do these checks in this order before you report a change to `app/` as complete:
 
 1. `npm run typecheck`
-2. `npm run test`
+2. `npm run lint`
+3. `npm run test`
 
 ## When something breaks
 
-| Symptom                                         | Cause                                                                                                  |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| 401 "Select a user from the DevUI panel"        | No user in the session — switch users and country in the floating panel (`app/components/dev-ui.tsx`). |
-| `tsc` reports every `./+types/*` import missing | Typegen has not run. Use `npm run typecheck`, which runs `react-router typegen` first.                 |
+| Symptom                                         | Cause                                                                                                                                                                                                                                                                                                                                                          |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 401 "Select a user from the DevUI panel"        | No user in the session — switch users and country in the floating panel (`app/components/dev-ui.tsx`).                                                                                                                                                                                                                                                         |
+| `tsc` reports every `./+types/*` import missing | Typegen has not run. Use `npm run typecheck`, which runs `react-router typegen` first.                                                                                                                                                                                                                                                                         |
+| `npm run reset <lesson>` hangs with no output   | `ai-hero-cli` waits at arrow-key prompts that neither the agent nor a `!` command can answer. Ask the user to run it in their own terminal. To start a lesson on a new branch yourself: `git fetch upstream live-run-through`, find the commit with `git log upstream/live-run-through --oneline --grep '<lesson>'`, then `git checkout -b <lesson> <commit>`. |
 
 ## Agent skills
 
